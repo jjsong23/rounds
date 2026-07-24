@@ -13,6 +13,13 @@ export const authConfig = {
   session: {
     strategy: "jwt",
   },
+  // Vercel assigns a new deployment URL on every deploy (no fixed AUTH_URL
+  // to pin), so Auth.js's production host-check needs to be told the
+  // dynamic Host header is trustworthy — Vercel's own routing guarantees
+  // that. Without this, sign-in fails with a generic "Configuration" error
+  // in production while working fine in dev (which trusts the host by
+  // default).
+  trustHost: true,
   providers: [],
   callbacks: {
     authorized({ auth, request }) {
