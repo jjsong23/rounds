@@ -1,0 +1,436 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------- Users ----------
+
+// name/image are populated from the OAuth/email provider profile at account
+// creation and exist to satisfy the Auth.js Prisma adapter's User contract;
+// displayName/avatarUrl are the app's own fields, filled in during onboarding.
+// dateOfBirth, ageAttestedAt, and displayName are nullable because Auth.js
+// creates the User row at sign-in, before onboarding has collected them —
+// getCurrentUser() treats a null dateOfBirth as "onboarding incomplete."
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  emailDomain   String?
+  name          String?
+  image         String?
+  displayName   String?
+  avatarUrl     String?
+  bio           String?
+  city          String?
+  dateOfBirth   DateTime?
+  ageAttestedAt DateTime?
+  isAdmin       Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+
+  accounts           Account[]
+  drinkPreferences   DrinkPreference[]
+  groupMemberships   GroupMembership[]
+  createdGroups      Group[]            @relation("GroupCreator")
+  tagFollows         TagFollow[]
+  hostedSeries       RoundSeries[]
+  hostedRounds       Round[]            @relation("RoundHost")
+  rsvps              Rsvp[]
+  attendances        Attendance[]       @relation("AttendanceUser")
+  confirmedAttendees Attendance[]       @relation("AttendanceConfirmedBy")
+  edgesAsA           Edge[]             @relation("EdgeUserA")
+  edgesAsB           Edge[]             @relation("EdgeUserB")
+  lastCalls          LastCall[]
+  lastCallResponses  LastCallResponse[]
+  xpEvents           XpEvent[]
+}
+
+// ---------- Auth.js (Prisma adapter) ----------
+// Session strategy is JWT, so no Session model is needed — the adapter's
+// session methods are never invoked by Auth.js core in that mode.
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+enum DrinkPreferenceKind {
+  BEER_STYLE
+  WINE_STYLE
+  NON_ALC
+}
+
+model DrinkPreference {
+  userId String
+  kind   DrinkPreferenceKind
+  value  String
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@id([userId, kind, value])
+}
+
+// ---------- Venues ----------
+
+enum VenueType {
+  BREWERY
+  TAPROOM
+  BEER_GARDEN
+  BREWPUB
+  WINE_BAR
+  TASTING_ROOM
+  BOTTLE_SHOP
+}
+
+enum NoiseLevel {
+  QUIET
+  MODERATE
+  LOUD
+}
+
+enum VenueOutreachStatus {
+  PROSPECT
+  CONTACTED
+  PARTNERED
+  DECLINED
+}
+
+model Venue {
+  id                 String              @id @default(cuid())
+  name               String
+  slug               String              @unique
+  address            String
+  city               String
+  lat                Float
+  lng                Float
+  venueType          VenueType
+  noiseLevel         NoiseLevel
+  hasFlights         Boolean             @default(false)
+  hasCommunalTables  Boolean             @default(false)
+  hasOutdoorSeating  Boolean             @default(false)
+  isDogFriendly      Boolean             @default(false)
+  hasFood            Boolean             @default(false)
+  acceptsLargeGroups Boolean             @default(false)
+  typicalPourPrice   Float?
+  contactName        String?
+  contactEmail       String?
+  notes              String?
+  // Ops-console-only CRM fields — never rendered on public venue pages.
+  outreachStatus     VenueOutreachStatus @default(PROSPECT)
+  outreachNotes      String?
+
+  rounds      Round[]
+  roundSeries RoundSeries[]
+  offers      VenueOffer[]
+  lastCalls   LastCall[]
+
+  @@index([city])
+}
+
+// ---------- Groups ----------
+
+enum GroupKind {
+  INDUSTRY
+  SOCIAL
+  ACTIVITY
+}
+
+enum GroupStatus {
+  ACTIVE
+  DORMANT
+}
+
+model Group {
+  id              String      @id @default(cuid())
+  slug            String      @unique
+  name            String
+  description     String
+  city            String
+  kind            GroupKind
+  createdByUserId String?
+  status          GroupStatus @default(ACTIVE)
+  lastRoundAt     DateTime?
+  createdAt       DateTime    @default(now())
+
+  createdBy   User?             @relation("GroupCreator", fields: [createdByUserId], references: [id])
+  memberships GroupMembership[]
+  rounds      Round[]
+  roundSeries RoundSeries[]
+
+  @@index([status])
+}
+
+enum MembershipRole {
+  MEMBER
+  HOST
+  ADMIN
+}
+
+model GroupMembership {
+  id       String         @id @default(cuid())
+  userId   String
+  groupId  String
+  role     MembershipRole @default(MEMBER)
+  joinedAt DateTime       @default(now())
+
+  user  User  @relation(fields: [userId], references: [id])
+  group Group @relation(fields: [groupId], references: [id])
+
+  @@unique([userId, groupId])
+}
+
+// ---------- Tags ----------
+
+model Tag {
+  id       String  @id @default(cuid())
+  slug     String  @unique
+  label    String
+  isActive Boolean @default(true)
+
+  roundTags RoundTag[]
+  follows   TagFollow[]
+}
+
+model RoundTag {
+  roundId String
+  tagId   String
+
+  round Round @relation(fields: [roundId], references: [id])
+  tag   Tag   @relation(fields: [tagId], references: [id])
+
+  @@id([roundId, tagId])
+  @@index([tagId])
+}
+
+model TagFollow {
+  userId String
+  tagId  String
+
+  user User @relation(fields: [userId], references: [id])
+  tag  Tag  @relation(fields: [tagId], references: [id])
+
+  @@id([userId, tagId])
+}
+
+// ---------- Rounds & series ----------
+
+enum SeriesCadence {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
+model RoundSeries {
+  id        String        @id @default(cuid())
+  groupId   String
+  hostId    String
+  venueId   String
+  cadence   SeriesCadence
+  dayOfWeek Int
+  timeOfDay String
+  endsAt    DateTime?
+  isActive  Boolean       @default(true)
+  createdAt DateTime      @default(now())
+
+  group  Group   @relation(fields: [groupId], references: [id])
+  host   User    @relation(fields: [hostId], references: [id])
+  venue  Venue   @relation(fields: [venueId], references: [id])
+  rounds Round[]
+}
+
+enum RoundStatus {
+  OPEN
+  FULL
+  CANCELLED
+  COMPLETED
+}
+
+// Invariant enforced at the application layer (Zod, per CLAUDE.md
+// conventions): a Round must have venueId or locationText, never neither.
+model Round {
+  id              String      @id @default(cuid())
+  groupId         String
+  hostId          String
+  venueId         String?
+  locationText    String?
+  seriesId        String?
+  title           String
+  description     String
+  startsAt        DateTime
+  capacity        Int
+  isFlightFocused Boolean     @default(false)
+  status          RoundStatus @default(OPEN)
+  createdAt       DateTime    @default(now())
+
+  group       Group        @relation(fields: [groupId], references: [id])
+  host        User         @relation("RoundHost", fields: [hostId], references: [id])
+  venue       Venue?       @relation(fields: [venueId], references: [id])
+  series      RoundSeries? @relation(fields: [seriesId], references: [id])
+  roundTags   RoundTag[]
+  rsvps       Rsvp[]
+  attendances Attendance[]
+  xpEvents    XpEvent[]
+
+  @@index([startsAt])
+  @@index([groupId])
+  @@index([seriesId])
+}
+
+enum RsvpStatus {
+  GOING
+  WAITLIST
+  CANCELLED
+}
+
+model Rsvp {
+  id        String     @id @default(cuid())
+  roundId   String
+  userId    String
+  status    RsvpStatus
+  createdAt DateTime   @default(now())
+
+  round Round @relation(fields: [roundId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@unique([roundId, userId])
+  @@index([roundId])
+}
+
+model Attendance {
+  id                String   @id @default(cuid())
+  roundId           String
+  userId            String
+  confirmedAt       DateTime @default(now())
+  confirmedByUserId String
+
+  round       Round @relation(fields: [roundId], references: [id])
+  user        User  @relation("AttendanceUser", fields: [userId], references: [id])
+  confirmedBy User  @relation("AttendanceConfirmedBy", fields: [confirmedByUserId], references: [id])
+
+  @@unique([roundId, userId])
+}
+
+// The warm graph. Rows store userAId < userBId lexicographically so each
+// pair has exactly one row — canonicalize both id order in reads and writes.
+model Edge {
+  id         String   @id @default(cuid())
+  userAId    String
+  userBId    String
+  roundCount Int      @default(0)
+  firstMetAt DateTime
+  lastMetAt  DateTime
+
+  userA User @relation("EdgeUserA", fields: [userAId], references: [id])
+  userB User @relation("EdgeUserB", fields: [userBId], references: [id])
+
+  @@unique([userAId, userBId])
+  @@index([userAId])
+  @@index([userBId])
+}
+
+// ---------- Last Call ----------
+
+model LastCall {
+  id           String   @id @default(cuid())
+  userId       String
+  venueId      String?
+  locationText String?
+  message      String?
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+
+  user      User               @relation(fields: [userId], references: [id])
+  venue     Venue?             @relation(fields: [venueId], references: [id])
+  responses LastCallResponse[]
+
+  @@index([expiresAt])
+}
+
+enum LastCallResponseStatus {
+  COMING
+  MAYBE
+  DECLINED
+}
+
+model LastCallResponse {
+  id         String                 @id @default(cuid())
+  lastCallId String
+  userId     String
+  status     LastCallResponseStatus
+
+  lastCall LastCall @relation(fields: [lastCallId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@unique([lastCallId, userId])
+}
+
+// ---------- XP ----------
+
+enum XpEventKind {
+  HOSTED_ROUND
+  ROUND_FILLED
+  REPEAT_ATTENDEE
+}
+
+model XpEvent {
+  id        String      @id @default(cuid())
+  userId    String
+  kind      XpEventKind
+  points    Int
+  roundId   String?
+  createdAt DateTime    @default(now())
+
+  user  User   @relation(fields: [userId], references: [id])
+  round Round? @relation(fields: [roundId], references: [id])
+
+  @@unique([userId, kind, roundId])
+}
+
+// ---------- Venue offers ----------
+
+model VenueOffer {
+  id            String    @id @default(cuid())
+  venueId       String
+  title         String
+  terms         String
+  minPartySize  Int
+  validDays     Json
+  validFromHour Int
+  validToHour   Int
+  startsOn      DateTime
+  endsOn        DateTime?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+
+  venue Venue @relation(fields: [venueId], references: [id])
+
+  @@index([venueId])
+}

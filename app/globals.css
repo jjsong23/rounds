@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+/*
+  Rounds token system — six named colors, chosen against three explicit
+  no-gos: no cream+terracotta, no near-black+single-acid-accent, no
+  gradient hero. `ink` is teal-tinted rather than neutral black, `paper`
+  is a warm stone rather than cream, and there are four accent colors used
+  for distinct meanings (not one "pop" color): amber for primary actions,
+  moss for calm/quiet signals, dusk for links/info, brick (rare) for
+  destructive actions only.
+*/
+:root {
+  --color-ink: #1b2e2c;
+  --color-paper: #f1eee4;
+  --color-amber: #c97a2b;
+  --color-moss: #57735f;
+  --color-dusk: #3d5a6c;
+  --color-brick: #9c4a3c;
+  --color-line: #ddd5c4;
+
+  --background: var(--color-paper);
+  --foreground: var(--color-ink);
+  --border: var(--color-line);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-amber: #e0973f;
+    --color-moss: #7a9b86;
+    --color-dusk: #7fa3bc;
+    --color-brick: #c17364;
+    --color-line: #33463f;
+
+    --background: var(--color-ink);
+    --foreground: var(--color-paper);
+    --border: var(--color-line);
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-ink: var(--color-ink);
+  --color-paper: var(--color-paper);
+  --color-amber: var(--color-amber);
+  --color-moss: var(--color-moss);
+  --color-dusk: var(--color-dusk);
+  --color-brick: var(--color-brick);
+  --color-border: var(--border);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+}
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-display), ui-serif, Georgia, serif;
+}
+
+/* Quality floor: every interactive element gets a visible, high-contrast
+   focus ring — never rely on the browser default alone, but never
+   suppress it either. */
+:focus-visible {
+  outline: 2px solid var(--color-amber);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
