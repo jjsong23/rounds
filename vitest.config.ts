@@ -9,9 +9,11 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    // Test files share the on-disk SQLite dev database; running them in
-    // parallel processes causes write-lock contention and timeouts, since
-    // SQLite (via better-sqlite3) only supports one writer at a time.
+    // Vitest doesn't load .env on its own (unlike Next.js) — without this,
+    // DATABASE_URL is undefined in every test file.
+    setupFiles: ["dotenv/config"],
+    // Kept from when local dev used SQLite (single-writer); harmless to
+    // leave for Postgres too.
     fileParallelism: false,
   },
 });
